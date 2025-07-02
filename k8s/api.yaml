@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-secret
+  namespace: clinic-appointments
+  labels:
+    app: clinic-api
+    component: api
+type: Opaque
+data:
+  DATABASE_URL: cG9zdGdyZXNxbCthc3luY3BnOi8vY2xpbmljX3VzZXI6Y2xpbmljX3Bhc3N3b3JkQHBvc3RncmVzLXNlcnZpY2U6NTQzMi9jbGluaWNfZGI=
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: clinic-appointments
+  labels:
+    app: clinic-api
+    component: api
+data:
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  DEBUG: "false"
+  TIMEZONE: "Europe/Moscow"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clinic-api
+  namespace: clinic-appointments
+  labels:
+    app: clinic-api
+    component: api
+    app.kubernetes.io/name: clinic-api
+    app.kubernetes.io/component: api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: clinic-api
+  template:
+    metadata:
+      labels:
+        app: clinic-api
+        component: api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: api
+        image: ghcr.io/tay/clinic:latest
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: api-config
+        - secretRef:
+            name: api-secret
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: var-tmp-volume
+          mountPath: /var/tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      - name: var-tmp-volume
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clinic-api-service
+  namespace: clinic-appointments
+  labels:
+    app: clinic-api
+    component: api
+spec:
+  selector:
+    app: clinic-api
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: clinic-api-ingress
+  namespace: clinic-appointments
+  labels:
+    app: clinic-api
+    component: api
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: clinic-api.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: clinic-api-service
+            port:
+              number: 80

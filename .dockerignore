@@ -1,0 +1,88 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Виртуальные окружения
+venv/
+.venv/
+env/
+.env/
+
+# Файлы IDE
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+
+# Файлы ОС
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Документация
+docs/
+
+# Базы данных
+*.db
+*.sqlite
+*.sqlite3
+
+# Кэш инструментов разработки
+.mypy_cache/
+
+# Файлы для сборки Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Kubernetes
+k8s/
+
+# CI/CD
+.github/
+
+# Логи
+*.log
+
+# Временные файлы
+*.tmp
+*.bak
+
+# Артефакты сборки
+build/
+dist/
+*.egg-info/
+
+# Отчеты о покрытии
+mypy-report/
+
+# Файлы проекта (не нужны в runtime)
+tests/
+bot/
+tech_task.txt
+PROJECT_SUMMARY.md
+pyproject.toml
+.flake8
+README.md
+Makefile
+.env*
+init.sql
