@@ -15,8 +15,16 @@ from app.models.doctor import Doctor
 
 
 def get_test_time() -> datetime:
-    """Получить тестовое время в правильной timezone."""
-    return datetime.now(ZoneInfo(settings.timezone))
+    """Получить следующий рабочий день в тестовом timezone."""
+    now = datetime.now(ZoneInfo(settings.timezone))
+    # Находим следующий рабочий день (пн-пт)
+    days_ahead = 1
+    while True:
+        test_date = now + timedelta(days=days_ahead)
+        # 0=понедельник, 4=пятница
+        if test_date.weekday() < 5:
+            return test_date
+        days_ahead += 1
 
 
 @pytest.mark.asyncio
@@ -113,7 +121,14 @@ async def test_create_appointment_validation_errors(test_db: AsyncSession) -> No
     await test_db.refresh(doctor)
 
     # Тест времени в прошлом
-    past_time = get_test_time() - timedelta(hours=1)
+    now = datetime.now(ZoneInfo("Europe/Moscow"))
+    past_time = now - timedelta(days=1)
+
+    # Если вчера был выходной, идем еще дальше назад
+    while past_time.weekday() >= 5:  # сб=5, вс=6
+        past_time -= timedelta(days=1)
+
+    past_time = past_time.replace(hour=10, minute=0, second=0, microsecond=0)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:

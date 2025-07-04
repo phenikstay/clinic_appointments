@@ -15,8 +15,16 @@ from app.schemas.appointment import AppointmentCreate
 
 
 def get_test_time() -> datetime:
-    """Получить текущее время в тестовом timezone."""
-    return datetime.now(ZoneInfo(settings.timezone))
+    """Получить следующий рабочий день в тестовом timezone."""
+    now = datetime.now(ZoneInfo(settings.timezone))
+    # Находим следующий рабочий день (пн-пт)
+    days_ahead = 1
+    while True:
+        test_date = now + timedelta(days=days_ahead)
+        # 0=понедельник, 4=пятница
+        if test_date.weekday() < 5:
+            return test_date
+        days_ahead += 1
 
 
 @pytest.mark.asyncio
@@ -127,7 +135,16 @@ class TestAppointmentValidation:
 
     def test_appointment_validation_past_time(self) -> None:
         """Тест валидации времени в прошлом."""
-        past_time = get_test_time() - timedelta(hours=1)
+        # Берем текущий момент и идем назад до прошлого рабочего дня
+        now = datetime.now(ZoneInfo("Europe/Moscow"))
+        past_time = now - timedelta(days=1)
+
+        # Если вчера был выходной, идем еще дальше назад
+        while past_time.weekday() >= 5:  # сб=5, вс=6
+            past_time -= timedelta(days=1)
+
+        # Устанавливаем рабочее время
+        past_time = past_time.replace(hour=10, minute=0, second=0, microsecond=0)
 
         with pytest.raises(ValidationError) as exc_info:
             AppointmentCreate(

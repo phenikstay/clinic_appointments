@@ -72,6 +72,21 @@ class AppointmentCreate(AppointmentBase):
                 f"Локальный timezone клиники: {settings.timezone}"
             )
 
+        # Получаем клинический timezone для валидации рабочих часов
+        clinic_tz = ZoneInfo(settings.timezone)
+        v_clinic_tz = v.astimezone(clinic_tz)
+
+        # СНАЧАЛА проверяем интервал записи (кратно 30 минутам) по времени клиники
+        if (
+            v_clinic_tz.minute not in [0, 30]
+            or v_clinic_tz.second != 0
+            or v_clinic_tz.microsecond != 0
+        ):
+            raise ValueError(
+                "Запись возможна только в начале часа или в половину "
+                "(по времени клиники)"
+            )
+
         # Валидируем время в том timezone, который указал пользователь
         user_timezone = v.tzinfo
 
@@ -81,10 +96,6 @@ class AppointmentCreate(AppointmentBase):
         # Проверка, что время в будущем (в timezone пользователя)
         if v <= now_user_tz:
             raise ValueError("Время записи должно быть в будущем")
-
-        # Получаем клинический timezone для валидации рабочих часов
-        clinic_tz = ZoneInfo(settings.timezone)
-        v_clinic_tz = v.astimezone(clinic_tz)
 
         # Проверка рабочих часов клиники (9:00 - 17:30 по времени клиники)
         if (
@@ -101,17 +112,6 @@ class AppointmentCreate(AppointmentBase):
         # Проверка рабочих дней (по времени клиники)
         if v_clinic_tz.weekday() > 4:  # 5=суббота, 6=воскресенье
             raise ValueError("Записи принимаются только в рабочие дни (пн-пт)")
-
-        # Проверка интервала записи (кратно 30 минутам) по времени клиники
-        if (
-            v_clinic_tz.minute not in [0, 30]
-            or v_clinic_tz.second != 0
-            or v_clinic_tz.microsecond != 0
-        ):
-            raise ValueError(
-                "Запись возможна только в начале часа или в половину "
-                "(по времени клиники)"
-            )
 
         # Логируем для отладки
         logger.info(

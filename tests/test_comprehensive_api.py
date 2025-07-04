@@ -15,8 +15,16 @@ from app.models.doctor import Doctor
 
 
 def get_test_time() -> datetime:
-    """Получить тестовое время в правильной timezone."""
-    return datetime.now(ZoneInfo(settings.timezone))
+    """Получить следующий рабочий день в тестовом timezone."""
+    now = datetime.now(ZoneInfo(settings.timezone))
+    # Находим следующий рабочий день (пн-пт)
+    days_ahead = 1
+    while True:
+        test_date = now + timedelta(days=days_ahead)
+        # 0=понедельник, 4=пятница
+        if test_date.weekday() < 5:
+            return test_date
+        days_ahead += 1
 
 
 @pytest.mark.asyncio
@@ -277,7 +285,7 @@ async def test_create_appointment_invalid_time_format(test_db: AsyncSession) -> 
 
 @pytest.mark.asyncio
 async def test_create_appointment_past_time(test_db: AsyncSession) -> None:
-    """Тест создания записи в прошлом."""
+    """Тест создания записи в прошлом времени."""
     app.dependency_overrides[AsyncSession] = lambda: test_db
 
     doctor = Doctor(name="Тестовый врач", specialization="Терапевт", is_active=True)
@@ -285,8 +293,15 @@ async def test_create_appointment_past_time(test_db: AsyncSession) -> None:
     await test_db.commit()
     await test_db.refresh(doctor)
 
-    # Время в прошлом
-    past_time = get_test_time() - timedelta(hours=1)
+    # Время в прошлом, но с правильными минутами (кратно 30) и в рабочий день
+    now = datetime.now(ZoneInfo("Europe/Moscow"))
+    past_time = now - timedelta(days=1)
+
+    # Если вчера был выходной, идем еще дальше назад
+    while past_time.weekday() >= 5:  # сб=5, вс=6
+        past_time -= timedelta(days=1)
+
+    past_time = past_time.replace(hour=10, minute=0, second=0, microsecond=0)
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -1057,7 +1072,7 @@ async def test_timezone_validation_missing_timezone(test_db: AsyncSession) -> No
     await test_db.refresh(doctor)
 
     # Пытаемся создать запись БЕЗ timezone (naive datetime)
-    tomorrow = datetime.now() + timedelta(days=1)
+    tomorrow = get_test_time() + timedelta(days=1)
     future_time_naive = tomorrow.replace(
         hour=12, minute=0, second=0, microsecond=0
     ).strftime(
@@ -1104,7 +1119,7 @@ async def test_timezone_validation_different_timezones_same_logical_time(
     await test_db.refresh(doctor)
 
     # Одинаковое логическое время 12:00 в разных timezone
-    tomorrow = datetime.now() + timedelta(days=1)
+    tomorrow = get_test_time() + timedelta(days=1)
     moscow_tz = ZoneInfo("Europe/Moscow")
     moscow_12_00 = tomorrow.replace(
         hour=12, minute=0, second=0, microsecond=0, tzinfo=moscow_tz
@@ -1160,7 +1175,7 @@ async def test_timezone_validation_different_timezones_different_logical_time(
     await test_db.refresh(doctor)
 
     # Разное логическое время в разных timezone
-    tomorrow = datetime.now() + timedelta(days=1)
+    tomorrow = get_test_time() + timedelta(days=1)
     moscow_tz = ZoneInfo("Europe/Moscow")
     moscow_12_00 = tomorrow.replace(
         hour=12, minute=0, second=0, microsecond=0, tzinfo=moscow_tz
@@ -1214,9 +1229,11 @@ async def test_timezone_validation_working_hours_different_timezones(
     await test_db.refresh(doctor)
 
     # Берем завтрашний день для теста
-    tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+    tomorrow = get_test_time() + timedelta(days=1)
     # 06:00 UTC = 09:00 Moscow (рабочее время клиники)
-    utc_06_00 = tomorrow.replace(hour=6, minute=0, second=0, microsecond=0).isoformat()
+    utc_06_00 = tomorrow.replace(
+        hour=6, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
+    ).isoformat()
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -1233,7 +1250,9 @@ async def test_timezone_validation_working_hours_different_timezones(
     assert response.status_code == 201  # Должно работать
 
     # 05:00 UTC = 08:00 Moscow (НЕ рабочее время клиники)
-    utc_05_00 = tomorrow.replace(hour=5, minute=0, second=0, microsecond=0).isoformat()
+    utc_05_00 = tomorrow.replace(
+        hour=5, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
+    ).isoformat()
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
